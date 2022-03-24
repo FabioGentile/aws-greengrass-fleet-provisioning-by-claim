@@ -183,7 +183,8 @@ public class IotIdentityHelper {
         registerThingRequest.templateName = templateName;
 
         if (templateParameters != null && !templateParameters.isEmpty()) {
-            // TODO: Add mac address here
+            // I need to pass the MBOX mac address to the template parameters, this will then be used by the
+            //      preprovision Lambda to validate the device
             String macAddress = getMacAddress();
             if (! macAddress.equals(""))
                 templateParameters.put("MacAddress", macAddress);
