@@ -25,6 +25,8 @@ import software.amazon.awssdk.iot.iotidentity.model.CreateKeysAndCertificateResp
 import software.amazon.awssdk.iot.iotidentity.model.RegisterThingResponse;
 
 import java.io.IOException;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,6 +43,32 @@ import static com.aws.greengrass.provisioning.ProvisionConfiguration.NucleusConf
 import static com.aws.greengrass.provisioning.ProvisionConfiguration.SystemConfiguration;
 
 public class FleetProvisioningByClaimPlugin implements DeviceIdentityInterface {
+
+    public static String getMacAddress() {
+        String ret = "";
+
+        try {
+            NetworkInterface ni = NetworkInterface.getByName("enp1s0");
+            if (ni != null) {
+                byte[] hardwareAddress = ni.getHardwareAddress();
+
+                if (hardwareAddress != null) {
+                    String[] hexadecimalFormat = new String[hardwareAddress.length];
+                    for (int i = 0; i < hardwareAddress.length; i++) {
+                        hexadecimalFormat[i] = String.format("%02X", hardwareAddress[i]);
+                    }
+                    ret = String.join("", hexadecimalFormat);
+                }
+            } else
+                logger.atError().log("Unable to find enp1s0 interface");
+
+
+        } catch (SocketException e) {
+            logger.atError().setCause(e).log("Exception encountered while getting device mac address");
+        }
+
+        return ret;
+    }
 
     static final String PLUGIN_NAME = "aws.greengrass.FleetProvisioningByClaim";
     private static final Logger logger = LogManager.getLogger(FleetProvisioningByClaimPlugin.class);
@@ -119,6 +147,16 @@ public class FleetProvisioningByClaimPlugin implements DeviceIdentityInterface {
                 proxyPassword);
         Map<String, Object> templateParameters =
                 (Map<String, Object>) parameterMap.get(TEMPLATE_PARAMETERS_PARAMETER_NAME);
+
+        if (templateParameters == null)
+            templateParameters = new HashMap<String, Object>();
+
+        // I need to pass the MBOX mac address to the template parameters, this will then be used by the
+        //      preprovision Lambda to validate the device
+        String macAddress = getMacAddress();
+        if (! macAddress.equals(""))
+            templateParameters.put("MacAddress", macAddress);
+
 
         MqttConnectionParametersBuilder mqttParameterBuilder =
                 MqttConnectionHelper.MqttConnectionParameters.builder()
