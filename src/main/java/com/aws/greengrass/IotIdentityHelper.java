@@ -18,6 +18,10 @@ import software.amazon.awssdk.iot.iotidentity.model.RegisterThingRequest;
 import software.amazon.awssdk.iot.iotidentity.model.RegisterThingResponse;
 import software.amazon.awssdk.iot.iotidentity.model.RegisterThingSubscriptionRequest;
 
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -25,6 +29,32 @@ import java.util.concurrent.Future;
 import static com.aws.greengrass.FutureExceptionHandler.AWS_IOT_DEFAULT_TIMEOUT_SECONDS;
 
 public class IotIdentityHelper {
+
+    public static String getMacAddress() {
+        String ret = "";
+
+        try {
+            NetworkInterface ni = NetworkInterface.getByName("enp1s0");
+            if (ni != null) {
+                byte[] hardwareAddress = ni.getHardwareAddress();
+
+                if (hardwareAddress != null) {
+                    String[] hexadecimalFormat = new String[hardwareAddress.length];
+                    for (int i = 0; i < hardwareAddress.length; i++) {
+                        hexadecimalFormat[i] = String.format("%02X", hardwareAddress[i]);
+                    }
+                    ret = String.join("", hexadecimalFormat);
+                }
+            } else
+                logger.atError().log("Unable to find enp1s0 interface");
+
+
+        } catch (SocketException e) {
+            logger.atError().setCause(e).log("Exception encountered while getting device identity information");
+        }
+
+        return ret;
+    }
     
     private static final Logger logger = LogManager.getLogger(IotIdentityHelper.class);
 
@@ -153,6 +183,14 @@ public class IotIdentityHelper {
         registerThingRequest.templateName = templateName;
 
         if (templateParameters != null && !templateParameters.isEmpty()) {
+            // TODO: Add mac address here
+            String macAddress = getMacAddress();
+            if (! macAddress.equals(""))
+                templateParameters.put("MacAddress", macAddress);
+
+            // This is for the pre provisioning hook Lambda to understand where the request is coming from
+            templateParameters.put("GreengrassVersion", "V2");
+
             registerThingRequest.parameters = templateParameters;
         }
 
